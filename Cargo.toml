@@ -1,0 +1,17 @@
+[package]
+name = "dyndump"
+version = "0.1.0"
+edition = "2021"
+authors = ["Irate-Walrus"]
+description = "Dump dynamics CRM by Irate Walrus"
+
+[dependencies]
+anyhow = "1.0.88"
+clap = { version = "4.5.17", features = ["derive"] }
+clap-verbosity = "2.1.0"
+env_logger = "0.11.5"
+log = "0.4.22"
+reqwest = { version = "0.12.7", features = ["json"] }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+tokio = { version = "1.40.0", features = ["full"] }
