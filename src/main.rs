@@ -54,6 +54,7 @@ async fn main() -> Result<()> {
         .format_target(false)
         .format_timestamp(None)
         .filter_level(args.verbose.log_level_filter())
+        .target(env_logger::Target::Stdout)
         .init();
 
     log::trace!("{:?}", &args);
