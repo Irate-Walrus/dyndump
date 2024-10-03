@@ -42,7 +42,7 @@ pub struct SystemUser {
     pub windows_live_id: String,
     #[serde(rename = "systemuserid")]
     pub system_user_id: String,
-    pub title: String,
+    pub title: Option<String>,
     #[serde(flatten)]
     dynamic: HashMap<String, serde_json::Value>,
 }

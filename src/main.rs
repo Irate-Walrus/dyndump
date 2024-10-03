@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
     let systemuser =
         get_entity::<dynamics::SystemUser>(&client, &args, "systemusers", &whoami.user_id).await?;
     log::info!(
-        "systemuser [windowsliveid={}, systemuserid={}, title={}]",
+        "systemuser [windowsliveid={}, systemuserid={}, title={:?}]",
         systemuser.windows_live_id,
         systemuser.system_user_id,
         systemuser.title
