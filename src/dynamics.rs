@@ -18,9 +18,9 @@ pub struct EntitySet<T> {
     pub odata_context: String,
     #[serde(rename = "@odata.count")]
     pub odata_count: i64,
+    #[serde(rename = "@odata.nextLink")]
+    pub odata_next: Option<String>,
     pub value: Vec<T>,
-    #[serde(flatten)]
-    dynamic: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

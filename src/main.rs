@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     fs::{self, File},
-    io::Write,
     path::PathBuf,
 };
 
@@ -13,7 +12,9 @@ use reqwest::header::{HeaderMap, HeaderName};
 use serde::{de::DeserializeOwned, Serialize};
 use tokio;
 
-use dyndump::dynamics::{self, EntitySet, InnerAcessInfo, OuterAcessInfo};
+pub mod dynamics;
+
+use dynamics::{EntitySet, InnerAcessInfo, OuterAcessInfo};
 
 const API_ENDPOINT: &'static str = "/api/data/";
 
@@ -108,10 +109,10 @@ async fn main() -> Result<()> {
             log::info!(
                 "dumped entityset {} [count={}]",
                 &entity.entity_set_name,
-                r.odata_count
+                r.value.len(),
             );
 
-            if r.odata_count > 0 {
+            if r.value.len() > 0 {
                 let record_id = r.value[0]
                     .get(&entity.primary_id_attribute)
                     .unwrap()
@@ -219,26 +220,46 @@ async fn get_entity_set<T: DeserializeOwned + Serialize>(
     client: &reqwest::Client,
     args: &Args,
     entity_set_name: &str,
-) -> Result<dynamics::EntitySet<T>> {
-    let response = client
-        .get(
-            args.target.to_owned()
-                + API_ENDPOINT
-                + &args.api
-                + "/"
-                + entity_set_name
-                + "?$count=true",
-        )
-        // .header(
-        //     "Prefer",
-        //     "odata.maxpagesize=1000,odata.include-annotations=\"Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded\"",
-        // )
-        .send()
-        .await?;
+) -> Result<EntitySet<T>> {
+    let url =
+        args.target.to_owned() + API_ENDPOINT + &args.api + "/" + entity_set_name + "?$count=true";
 
-    if response.status() != 200 {
-        return Err(anyhow!("request failed {}", response.status()));
+    let mut set = EntitySet::<T> {
+        odata_context: "".to_owned(),
+        odata_count: -1,
+        odata_next: Some(url),
+        value: Vec::new(),
     };
+
+    let mut i = 0;
+    while let Some(next_url) = set.odata_next {
+        log::trace!("dumping page {} of entityset {}", i, &entity_set_name);
+        let response = client
+            .get(next_url)
+            .header(
+                "Prefer",
+                "odata.maxpagesize=1000,odata.include-annotations=\"Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded\"",
+            )
+            .send()
+            .await?;
+
+        if response.status() != 200 {
+            return Err(anyhow!("request failed {}", response.status()));
+        };
+
+        let mut page = response.json::<EntitySet<T>>().await?;
+        log::trace!(
+            "dumped page {} of entityset {} [page_size={}]",
+            i,
+            &entity_set_name,
+            &page.value.len()
+        );
+
+        set.value.append(&mut page.value);
+        set.odata_count = set.value.len() as i64;
+        set.odata_next = page.odata_next;
+        i += 1;
+    }
 
     fs::create_dir_all(&args.output_dir)?;
 
@@ -246,12 +267,9 @@ async fn get_entity_set<T: DeserializeOwned + Serialize>(
     file_path.push(entity_set_name);
     file_path.set_extension("json");
 
-    let mut write_file = File::create(&file_path)?;
-    write_file.write_all(&response.bytes().await?)?;
-
-    let read_file = File::open(&file_path)?;
-    let json: EntitySet<T> = serde_json::from_reader(read_file)?;
-    Ok(json)
+    let writer = File::create(&file_path)?;
+    serde_json::to_writer(writer, &set)?;
+    Ok(set)
 }
 
 async fn get_record_access_info(
