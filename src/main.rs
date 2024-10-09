@@ -59,7 +59,15 @@ async fn main() -> Result<()> {
 
     log::trace!("{:?}", &args);
 
-    let client = build_client(&args)?;
+    let client = match build_client(&args) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("failed to build HTTP client");
+            log::error!("{}",e);
+            return Ok(());
+        },
+    };
+
     let whoami = whoami(&client, &args).await?;
     let systemuser =
         get_entity::<dynamics::SystemUser>(&client, &args, "systemusers", &whoami.user_id).await?;
@@ -278,11 +286,12 @@ fn parse_headers(headers: &Vec<String>) -> Result<HeaderMap> {
     for header_str in headers.iter() {
         let split: Vec<&str> = header_str.split(':').collect();
 
-        let name = split.get(0).unwrap(); //TODO
-        let value = split.get(1).unwrap();
-
-        let header_name = HeaderName::from_lowercase(name.to_lowercase().as_bytes())?;
-        header_map.insert(header_name, value.parse()?);
+        if let &[name, value] = split.as_slice() {
+            let header_name = HeaderName::from_lowercase(name.to_lowercase().as_bytes())?;
+            header_map.insert(header_name, value.parse()?);
+        } else {
+            return Err(anyhow!("failed to parse header value: {}", &header_str[..32])); 
+        }
     }
 
     Ok(header_map)
