@@ -122,6 +122,8 @@ async fn main() -> Result<()> {
         });
     }
 
+    join_set.join_all().await;
+
     Ok(())
 }
 
