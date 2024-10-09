@@ -12,7 +12,7 @@ pub struct WhoAmIResponse {
     pub organization_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EntitySet<T> {
     #[serde(rename = "@odata.context")]
     pub odata_context: String,
@@ -23,7 +23,7 @@ pub struct EntitySet<T> {
     pub value: Vec<T>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct EntityDefinition {
     pub schema_name: String,
@@ -34,7 +34,7 @@ pub struct EntityDefinition {
     pub dynamic: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SystemUser {
     #[serde(rename = "@odata.context")]
     pub odata_context: String,
