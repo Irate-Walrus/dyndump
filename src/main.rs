@@ -63,9 +63,9 @@ async fn main() -> Result<()> {
         Ok(c) => c,
         Err(e) => {
             log::error!("failed to build HTTP client");
-            log::error!("{}",e);
+            log::error!("{}", e);
             return Ok(());
-        },
+        }
     };
 
     let whoami = whoami(&client, &args).await?;
@@ -290,7 +290,10 @@ fn parse_headers(headers: &Vec<String>) -> Result<HeaderMap> {
             let header_name = HeaderName::from_lowercase(name.to_lowercase().as_bytes())?;
             header_map.insert(header_name, value.parse()?);
         } else {
-            return Err(anyhow!("failed to parse header value: {}", &header_str[..32])); 
+            return Err(anyhow!(
+                "failed to parse header value: {}",
+                &header_str[..32]
+            ));
         }
     }
 
