@@ -14,6 +14,8 @@ Options:
   -o, --output-dir <OUTPUT_DIR>  Output directory [default: dump]
   -v, --verbose...               More output per occurrence
   -q, --quiet...                 Less output per occurrence
+      --page-size <PAGE_SIZE>    Page size preference [default: 1000]
+      --threads <THREADS>        Threads, one thread per entity set [default: 4]
   -h, --help                     Print help
   -V, --version                  Print version
 ```
