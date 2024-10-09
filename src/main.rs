@@ -37,6 +37,10 @@ pub struct Args {
     #[arg(short, long, default_value = "v9.2")]
     api: String,
 
+    /// Dump specified entitysets only
+    #[arg(short, long)]
+    sets: Vec<String>,
+
     /// Disable TLS checks
     #[arg(short = 'k', long)]
     insecure: bool,
@@ -89,15 +93,17 @@ async fn main() -> Result<()> {
         systemuser.title
     );
 
-    let userprivs =
-        request_systemuser_privileges(&client, &args, &systemuser.system_user_id).await?;
+    if args.sets.is_empty() {
+        let userprivs =
+            request_systemuser_privileges(&client, &args, &systemuser.system_user_id).await?;
 
-    for privilege in userprivs.role_privileges.iter() {
-        log::info!(
-            "roleprivilege [name={}, privilegeid={}]",
-            privilege.privilege_name,
-            privilege.privilege_id
-        );
+        for privilege in userprivs.role_privileges.iter() {
+            log::info!(
+                "roleprivilege [name={}, privilegeid={}]",
+                privilege.privilege_name,
+                privilege.privilege_id
+            );
+        }
     }
 
     let definition_set =
@@ -105,7 +111,19 @@ async fn main() -> Result<()> {
             .await?;
 
     let mut join_set: JoinSet<Result<(), ()>> = JoinSet::new();
-    let definitions = definition_set.value.clone();
+    let definitions: Vec<EntityDefinition> = definition_set
+        .value
+        .clone()
+        .into_iter()
+        .filter(|d| {
+            log::trace!(
+                "definition contains_{}={}",
+                &d.entity_set_name,
+                args.sets.contains(&d.entity_set_name)
+            );
+            args.sets.is_empty() || args.sets.contains(&d.entity_set_name)
+        })
+        .collect();
 
     for definition in definitions {
         while join_set.len() >= args.threads as usize {
@@ -276,7 +294,7 @@ async fn request_entityset<T: DeserializeOwned + Serialize>(
 
     let mut i = 0;
     while let Some(next_url) = set.odata_next {
-        log::trace!("dumping page {} of entityset {}", i, &entity_set_name);
+        log::debug!("dumping page {} of entityset {}", i, &entity_set_name);
         let response = client
             .get(next_url)
             .header("Prefer", format!("odata.maxpagesize={}", args.page_size))
@@ -288,7 +306,7 @@ async fn request_entityset<T: DeserializeOwned + Serialize>(
         };
 
         let mut page = response.json::<EntitySet<T>>().await?;
-        log::trace!(
+        log::debug!(
             "dumped page {} of entityset {} [page_size={}]",
             i,
             &entity_set_name,
