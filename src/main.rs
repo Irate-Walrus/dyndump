@@ -46,6 +46,10 @@ pub struct Args {
 
     #[command(flatten)]
     verbose: Verbosity<InfoLevel>,
+
+    /// Page size preference
+    #[arg(long, default_value_t = 1000)]
+    page_size: u32,
 }
 
 #[tokio::main]
@@ -236,10 +240,7 @@ async fn get_entity_set<T: DeserializeOwned + Serialize>(
         log::trace!("dumping page {} of entityset {}", i, &entity_set_name);
         let response = client
             .get(next_url)
-            .header(
-                "Prefer",
-                "odata.maxpagesize=1000,odata.include-annotations=\"Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded\"",
-            )
+            .header("Prefer", format!("odata.maxpagesize={}", args.page_size))
             .send()
             .await?;
 
