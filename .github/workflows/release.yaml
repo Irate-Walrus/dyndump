@@ -7,7 +7,7 @@ on:
     branches: ["main"]
 env:
   # Define the rust version to use
-  RUST_VERSION: 1.83.0
+  RUST_VERSION: 1.80.0
   # Rust build arguments
   BUILD_ARGS: "--release --all-features"
   # The binary name
