@@ -82,15 +82,15 @@ async fn main() -> Result<()> {
         }
     };
 
-    let whoami = whoami(&client, &args).await?;
+    let whoami = request_whoami(&client, &args).await?;
     let systemuser =
         request_entity::<dynamics::SystemUser>(&client, &args, "systemusers", &whoami.user_id)
             .await?;
     log::info!(
         "systemuser [windowsliveid={}, systemuserid={}, title={:?}]",
-        systemuser.windows_live_id,
-        systemuser.system_user_id,
-        systemuser.title
+        &systemuser.windows_live_id,
+        &systemuser.system_user_id,
+        &systemuser.title
     );
 
     if args.sets.is_empty() {
@@ -99,9 +99,10 @@ async fn main() -> Result<()> {
 
         for privilege in userprivs.role_privileges.iter() {
             log::info!(
-                "roleprivilege [name={}, privilegeid={}]",
-                privilege.privilege_name,
-                privilege.privilege_id
+                "roleprivilege [name={}, depth={}, privilegeid={}]",
+                &privilege.privilege_name,
+                &privilege.depth,
+                &privilege.privilege_id
             );
         }
     }
@@ -110,14 +111,14 @@ async fn main() -> Result<()> {
         request_entityset::<dynamics::EntityDefinition>(&client, &args, "EntityDefinitions")
             .await?;
 
-    let mut join_set: JoinSet<Result<(), ()>> = JoinSet::new();
+    let mut join_set: JoinSet<Result<()>> = JoinSet::new();
     let definitions: Vec<EntityDefinition> = definition_set
         .value
         .clone()
         .into_iter()
         .filter(|d| {
             log::trace!(
-                "definition contains_{}={}",
+                "definition contains {}={}",
                 &d.entity_set_name,
                 args.sets.contains(&d.entity_set_name)
             );
@@ -150,7 +151,7 @@ async fn dump_entityset(
     args: &Args,
     systemuser_id: &str,
     definition: &EntityDefinition,
-) -> Result<(), ()> {
+) -> Result<()> {
     let result = request_entityset::<HashMap<String, serde_json::Value>>(
         &client,
         &args,
@@ -173,12 +174,16 @@ async fn dump_entityset(
             r.value.len(),
         );
 
-        if r.value.len() > 0 {
-            let record_id = r.value[0]
-                .get(&definition.primary_id_attribute)
-                .unwrap()
-                .as_str()
-                .unwrap();
+        if let Some(record) = r.value.first() {
+            let id_value = match record.get(&definition.primary_id_attribute) {
+                Some(r) => r,
+                None => return Err(anyhow!("record primary id attribute is null")),
+            };
+
+            let record_id = match id_value.as_str() {
+                Some(s) => s,
+                None => return Err(anyhow!("record primary id attribute is not a string")),
+            };
 
             let access_result = request_record_accessinfo(
                 &client,
@@ -190,8 +195,13 @@ async fn dump_entityset(
             .await;
 
             if let Ok(outer) = access_result {
-                //TODO: errors
-                let inner: InnerAcessInfo = serde_json::from_str(&outer.access_info).unwrap();
+                let inner: InnerAcessInfo = match serde_json::from_str(&outer.access_info) {
+                    Ok(i) => i,
+                    Err(e) => {
+                        return Err(anyhow!("failed to deserialize inner access info: {}", e))
+                    }
+                };
+
                 log::info!(
                     "recordprivilege {} [{}]",
                     &definition.entity_set_name,
@@ -218,7 +228,7 @@ fn build_client(args: &Args) -> Result<reqwest::Client> {
     Ok(builder.build()?)
 }
 
-async fn whoami(client: &reqwest::Client, args: &Args) -> Result<dynamics::WhoAmIResponse> {
+async fn request_whoami(client: &reqwest::Client, args: &Args) -> Result<dynamics::WhoAmIResponse> {
     let response = client
         .get(args.target.to_owned() + API_ENDPOINT + &args.api + "/WhoAmI")
         .send()
