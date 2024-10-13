@@ -47,8 +47,9 @@ jobs:
     steps:
       - name: Checkout Git repo
         uses: actions/checkout@v4
-      - name: Install OpenSSL
-        run: sudo apt install libssl-dev
+      - name: Install libssl-dev & pkgconfig
+        if: ${{ contains(matrix.platform.target, 'linux') }}
+        run: sudo apt install libssl-dev pkg-config
       # Linux & Windows
       - name: Install Rust toolchain
         if: ${{ !contains(matrix.platform.target, 'apple') }}
