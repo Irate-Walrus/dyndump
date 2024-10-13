@@ -83,6 +83,7 @@ async fn main() -> Result<()> {
     };
 
     let whoami = request_whoami(&client, &args).await?;
+
     let systemuser =
         request_entity::<dynamics::SystemUser>(&client, &args, "systemusers", &whoami.user_id)
             .await?;
@@ -233,10 +234,11 @@ async fn request_whoami(client: &reqwest::Client, args: &Args) -> Result<dynamic
         .get(args.target.to_owned() + API_ENDPOINT + &args.api + "/WhoAmI")
         .send()
         .await?
-        .json::<dynamics::WhoAmIResponse>()
-        .await?;
+        .error_for_status()?;
 
-    Ok(response)
+    let whoami = response.json::<dynamics::WhoAmIResponse>().await?;
+
+    Ok(whoami)
 }
 
 async fn request_systemuser_privileges(
@@ -256,6 +258,7 @@ async fn request_systemuser_privileges(
         )
         .send()
         .await?
+        .error_for_status()?
         .json::<dynamics::UserPrivileges>()
         .await?;
 
@@ -309,11 +312,8 @@ async fn request_entityset<T: DeserializeOwned + Serialize>(
             .get(next_url)
             .header("Prefer", format!("odata.maxpagesize={}", args.page_size))
             .send()
-            .await?;
-
-        if response.status() != 200 {
-            return Err(anyhow!("request failed {}", response.status()));
-        };
+            .await?
+            .error_for_status()?;
 
         let mut page = response.json::<EntitySet<T>>().await?;
         log::debug!(
@@ -362,6 +362,7 @@ async fn request_record_accessinfo(
         )
         .send()
         .await?
+        .error_for_status()?
         .json::<OuterAcessInfo>()
         .await?;
 
