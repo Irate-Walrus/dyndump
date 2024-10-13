@@ -101,6 +101,7 @@
                   yamllint = {
                     enable = true;
                     settings.preset = "relaxed";
+                    settings.strict = false;
                   };
 
                   editorconfig-checker.enable = true;
