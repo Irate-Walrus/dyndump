@@ -1,0 +1,115 @@
+on:
+  # Indicates I want to run this workflow on all branches, PR, and tags
+  push:
+    #branches: ["**"]
+    tags: ["*"]
+  pull_request:
+    branches: ["main"]
+env:
+  # Define the rust version to use
+  RUST_VERSION: 1.83.0
+  # Rust build arguments
+  BUILD_ARGS: "--release --all-features"
+  # The binary name
+  BIN_NAME: "dyndump"
+  # Docker token required to pull images from DockerHub
+  # DOCKER_LOGIN: ${{ secrets.DOCKER_LOGIN }}
+  # DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
+jobs:
+  build:
+    name: Build - ${{ matrix.platform.name }}
+    # By default, runs on Ubuntu, otherwise, override with the desired os
+    runs-on: ${{ matrix.platform.os || 'ubuntu-latest' }}
+    strategy:
+      matrix:
+        # Set platforms you want to build your binaries on
+        platform:
+          # Linux
+          # The name is used for pretty print
+          - name: Linux x86_64
+            # The used Rust target architecture
+            target: x86_64-unknown-linux-gnu
+            command: cargo
+          - name: Linux aarch64
+            target: aarch64-unknown-linux-gnu
+            command: cross
+          # Mac OS
+          #- name: MacOS x86_64
+          #  target: x86_64-apple-darwin
+          #- name: MacOS aarch64
+          #  target: aarch64-apple-darwin
+          # Windows
+          - name: Windows x86_64
+            # Use another GitHub action OS
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            command: cargo
+    steps:
+      - name: Checkout Git repo
+        uses: actions/checkout@v4
+      # Linux & Windows
+      - name: "Install Rust toolchain"
+        if: ${{ !contains(matrix.platform.target, 'apple') }}
+        run: |
+          rustup update ${{ env.RUST_VERSION  }} &&
+          rustup default ${{ env.RUST_VERSION  }}
+      - name: Install Cross
+        if: ${{matrix.platform.command == 'cross'}}
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross
+      - name: Build ${{ matrix.platform.name }} binary
+        if: ${{ !contains(matrix.platform.target, 'apple') }}
+        run: ${{matrix.platform.command}} build ${{ env.BUILD_ARGS }} --target ${{ matrix.platform.target }}
+      # Mac OS
+      #- name: Login to DockerHub
+      #  if: contains(matrix.platform.target, 'apple')
+      #  # We log on DockerHub
+      #  uses: docker/login-action@v3
+      #  with:
+      #    username: ${{ env.DOCKER_LOGIN }}
+      #    password: ${{ env.DOCKER_TOKEN }}
+      #- name: Build ${{ matrix.platform.name }} binary
+      #  if: contains(matrix.platform.target, 'apple')
+      #  # We use a dedicated Rust image containing required Apple libraries to cross-compile on multiple archs
+      #  run: |
+      #    docker run --rm --volume "${PWD}":/root/src --workdir /root/src joseluisq/rust-linux-darwin-builder:$RUST_VERSION \
+      #    sh -c "CC=o64-clang CXX=o64-clang++ cargo build $BUILD_ARGS --target ${{ matrix.platform.target }}"
+      #
+      - name: Store artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # Finally, we store the binary as GitHub artifact for later usage
+          name: ${{ matrix.platform.target }}-${{ env.BIN_NAME }}
+          path: target/${{ matrix.platform.target }}/release/${{ env.BIN_NAME }}${{ contains(matrix.platform.target, 'windows') && '.exe' || '' }}
+          retention-days: 1
+  release:
+    name: Release
+    needs: [build]
+    # We run the release job only if a tag starts with 'v' letter
+    if: startsWith( github.ref, 'refs/tags/v' )
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Git repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Download all artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      # Goreleaser
+      - name: Set up Go
+        uses: actions/setup-go@v5
+      - name: Chmod GoReleaser hook
+        run: chmod +x ./.goreleaser_hook.sh
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          # Run goreleaser and ignore non-committed files (downloaded artifacts)
+          args: release --clean --skip=validate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_DYNDUMP_RUST_CROSS }}
