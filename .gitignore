@@ -1,1 +1,5 @@
-/target
+target/
+.devenv/
+.pre-commit-config.yaml
+Cargo.lock
+flake.lock
