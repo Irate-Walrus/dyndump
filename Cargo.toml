@@ -1,6 +1,6 @@
 [package]
 name = "dyndump"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Irate-Walrus"]
 description = "Dump dynamics CRM by Irate Walrus"

@@ -29,7 +29,7 @@ pub struct Args {
     #[arg(short = 'H', long)]
     headers: Vec<String>,
 
-    /// HTTP proxy e.g. "http://localhost:8080"
+    /// HTTP/SOCKS proxy e.g. "http://localhost:8080"
     #[arg(short, long)]
     proxy: Option<String>,
 
@@ -37,9 +37,13 @@ pub struct Args {
     #[arg(short, long, default_value = "v9.2")]
     api: String,
 
-    /// Dump specified entitysets only
+    /// Include specified entitysets only
     #[arg(short, long)]
-    sets: Vec<String>,
+    include: Vec<String>,
+
+    /// Exclude specified entitysets
+    #[arg(short, long, default_values_t = ["webresources".to_string(), "audits".to_string()])]
+    exclude: Vec<String>,
 
     /// Disable TLS checks
     #[arg(short = 'k', long)]
@@ -94,7 +98,7 @@ async fn main() -> Result<()> {
         &systemuser.title
     );
 
-    if args.sets.is_empty() {
+    if args.include.is_empty() {
         let userprivs =
             request_systemuser_privileges(&client, &args, &systemuser.system_user_id).await?;
 
@@ -121,9 +125,10 @@ async fn main() -> Result<()> {
             log::trace!(
                 "definition contains {}={}",
                 &d.entity_set_name,
-                args.sets.contains(&d.entity_set_name)
+                args.include.contains(&d.entity_set_name)
             );
-            args.sets.is_empty() || args.sets.contains(&d.entity_set_name)
+            (args.include.is_empty() || args.include.contains(&d.entity_set_name))
+                && !args.exclude.contains(&d.entity_set_name)
         })
         .collect();
 

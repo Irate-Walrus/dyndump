@@ -8,9 +8,10 @@ Arguments:
 
 Options:
   -H, --headers <HEADERS>        HTTP headers e.g. "Cookie: CrmOwinAuth ...;"
-  -p, --proxy <PROXY>            HTTP proxy e.g. "http://localhost:8080"
+  -p, --proxy <PROXY>            HTTP/SOCKS proxy e.g. "http://localhost:8080"
   -a, --api <API>                API version [default: v9.2]
-  -s, --sets <SETS>              Dump specified entitysets only
+  -i, --include <INCLUDE>        Include specified entitysets only
+  -e, --exclude <EXCLUDE>        Exclude specified entitysets [default: webresources audits]
   -k, --insecure                 Disable TLS checks
   -o, --output-dir <OUTPUT_DIR>  Output directory [default: dump]
   -v, --verbose...               More output per occurrence
