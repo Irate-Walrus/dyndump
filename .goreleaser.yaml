@@ -14,7 +14,8 @@ builds:
         goarch: arm64
     hooks:
       post:
-        - ./.goreleaser_hook.sh {{ .Arch }} {{ .Os }} {{ .ProjectName }}
+        - cmd: ./.goreleaser_hook.sh {{ .Arch }} {{ .Os }} {{ .Path }}
+          output: true
 archives:
   - format: tar.gz
     # this name template makes the OS and Arch compatible with the results of `uname`.
