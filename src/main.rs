@@ -376,16 +376,18 @@ async fn request_record_accessinfo(
 
 fn parse_http_headers(headers: &Vec<String>) -> Result<HeaderMap> {
     let mut header_map = HeaderMap::new();
-    for header_str in headers.iter() {
-        let split: Vec<&str> = header_str.split(':').collect();
 
-        if let &[name, value] = split.as_slice() {
+    for header_str in headers.iter() {
+        if let Some((name, value)) = header_str.split_once(':') {
+            let name = name.trim();
+            let value = value.trim();
+
             let header_name = HeaderName::from_lowercase(name.to_lowercase().as_bytes())?;
             header_map.insert(header_name, value.parse()?);
         } else {
             return Err(anyhow!(
-                "failed to parse header value: {}",
-                &header_str[..32]
+                "invalid header format (missing colon): {}",
+                &header_str[..header_str.len().min(32)]
             ));
         }
     }
