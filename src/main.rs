@@ -231,17 +231,28 @@ fn build_client(args: &Args) -> Result<reqwest::Client> {
         builder = builder.proxy(reqwest::Proxy::all(proxy.clone())?);
     }
 
+    builder = builder.connection_verbose(true);
+
     Ok(builder.build()?)
 }
 
 async fn request_whoami(client: &reqwest::Client, args: &Args) -> Result<dynamics::WhoAmIResponse> {
-    let response = client
-        .get(args.target.to_owned() + API_ENDPOINT + &args.api + "/WhoAmI")
-        .send()
-        .await?
-        .error_for_status()?;
+    let url = format!("{}{}{}/WhoAmI", args.target, API_ENDPOINT, args.api);
+    log::debug!("requesting /WhoAmI from {}", url);
 
-    let whoami = response.json::<dynamics::WhoAmIResponse>().await?;
+    let response = client.get(&url).send().await?;
+
+    let status = response.status();
+    let body = response.text().await?;
+
+    log::debug!("received response {:?} {:?}", &status, &body);
+
+    if !status.is_success() {
+        log::error!("api error {}: {}", status, body);
+        return Err(anyhow!("request error")); // or custom error
+    }
+
+    let whoami = serde_json::from_str::<dynamics::WhoAmIResponse>(&body)?;
 
     Ok(whoami)
 }
