@@ -8,7 +8,6 @@ use std::{
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use clap_verbosity::{InfoLevel, Verbosity};
-use log;
 use reqwest::header::{HeaderMap, HeaderName};
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::{self, task::JoinSet};
@@ -16,6 +15,7 @@ use tokio::{self, task::JoinSet};
 pub mod dynamics;
 
 use dynamics::{EntityDefinition, EntitySet, InnerAcessInfo, OuterAcessInfo};
+use tracing::{debug, error, info, trace, warn};
 
 const API_ENDPOINT: &'static str = "/api/data/";
 
@@ -65,23 +65,34 @@ pub struct Args {
     threads: u32,
 }
 
+fn setup_logger() {
+    use tracing_subscriber::prelude::*;
+
+    let env = tracing_subscriber::EnvFilter::from_env("RUST_LOG");
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_timer(tracing_subscriber::fmt::time::Uptime::default())
+        .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
+        .with_writer(std::io::stderr)
+        .with_filter(env);
+
+    let registry = tracing_subscriber::registry().with(fmt_layer);
+
+    registry.init();
+    tracing::trace!(start = jiff::Timestamp::now().to_string());
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Arc::new(Args::parse());
-    env_logger::builder()
-        .format_target(false)
-        .format_timestamp(None)
-        .filter_level(args.verbose.log_level_filter())
-        .target(env_logger::Target::Stdout)
-        .init();
+    setup_logger();
 
-    log::trace!("{:?}", &args);
+    trace!("{:?}", &args);
 
     let client = match build_client(&args) {
         Ok(c) => Arc::new(c),
         Err(e) => {
-            log::error!("failed to build HTTP client");
-            log::error!("{}", e);
+            error!("failed to build HTTP client");
+            error!("{}", e);
             return Ok(());
         }
     };
@@ -91,11 +102,9 @@ async fn main() -> Result<()> {
     let systemuser =
         request_entity::<dynamics::SystemUser>(&client, &args, "systemusers", &whoami.user_id)
             .await?;
-    log::info!(
+    info!(
         "systemuser [windowsliveid={}, systemuserid={}, title={:?}]",
-        &systemuser.windows_live_id,
-        &systemuser.system_user_id,
-        &systemuser.title
+        &systemuser.windows_live_id, &systemuser.system_user_id, &systemuser.title
     );
 
     if args.include.is_empty() {
@@ -103,11 +112,9 @@ async fn main() -> Result<()> {
             request_systemuser_privileges(&client, &args, &systemuser.system_user_id).await?;
 
         for privilege in userprivs.role_privileges.iter() {
-            log::info!(
+            info!(
                 "roleprivilege [name={}, depth={}, privilegeid={}]",
-                &privilege.privilege_name,
-                &privilege.depth,
-                &privilege.privilege_id
+                &privilege.privilege_name, &privilege.depth, &privilege.privilege_id
             );
         }
     }
@@ -122,7 +129,7 @@ async fn main() -> Result<()> {
         .clone()
         .into_iter()
         .filter(|d| {
-            log::trace!(
+            trace!(
                 "definition contains {}={}",
                 &d.entity_set_name,
                 args.include.contains(&d.entity_set_name)
@@ -166,15 +173,14 @@ async fn dump_entityset(
     .await;
 
     if let Err(e) = &result {
-        log::warn!(
+        warn!(
             "entityset failed {} with {}",
-            &definition.entity_set_name,
-            e
+            &definition.entity_set_name, e
         );
     }
 
     if let Ok(r) = &result {
-        log::info!(
+        info!(
             "dumped entityset {} [count={}]",
             &definition.entity_set_name,
             r.value.len(),
@@ -208,10 +214,9 @@ async fn dump_entityset(
                     }
                 };
 
-                log::info!(
+                info!(
                     "recordprivilege {} [{}]",
-                    &definition.entity_set_name,
-                    &inner.granted_access_rights
+                    &definition.entity_set_name, &inner.granted_access_rights
                 );
             }
         }
@@ -238,17 +243,17 @@ fn build_client(args: &Args) -> Result<reqwest::Client> {
 
 async fn request_whoami(client: &reqwest::Client, args: &Args) -> Result<dynamics::WhoAmIResponse> {
     let url = format!("{}{}{}/WhoAmI", args.target, API_ENDPOINT, args.api);
-    log::debug!("requesting /WhoAmI from {}", url);
+    debug!("requesting /WhoAmI from {}", url);
 
     let response = client.get(&url).send().await?;
 
     let status = response.status();
     let body = response.text().await?;
 
-    log::debug!("received response {:?} {:?}", &status, &body);
+    debug!("received response {:?} {:?}", &status, &body);
 
     if !status.is_success() {
-        log::error!("api error {}: {}", status, body);
+        error!("api error {}: {}", status, body);
         return Err(anyhow!("request error")); // or custom error
     }
 
@@ -323,7 +328,7 @@ async fn request_entityset<T: DeserializeOwned + Serialize>(
 
     let mut i = 0;
     while let Some(next_url) = set.odata_next {
-        log::debug!("dumping page {} of entityset {}", i, &entity_set_name);
+        debug!("dumping page {} of entityset {}", i, &entity_set_name);
         let response = client
             .get(next_url)
             .header("Prefer", format!("odata.maxpagesize={}", args.page_size))
@@ -332,7 +337,7 @@ async fn request_entityset<T: DeserializeOwned + Serialize>(
             .error_for_status()?;
 
         let mut page = response.json::<EntitySet<T>>().await?;
-        log::debug!(
+        debug!(
             "dumped page {} of entityset {} [page_size={}]",
             i,
             &entity_set_name,
